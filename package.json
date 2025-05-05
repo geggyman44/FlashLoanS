@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.31.1",
+    "@orca-so/whirlpools-sdk": "^0.13.21",
+    "@solana/spl-token": "^0.4.13",
+    "@solana/web3.js": "^1.98.2"
+  }
+}
