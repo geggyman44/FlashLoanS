@@ -1,11 +1,15 @@
 {
   "license": "ISC",
   "scripts": {
+    "flashloan": "node scripts/run_flashloan.js",
+    "test": "anchor test",
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",
+    "@orca-so/whirlpools-sdk": "^0.8.0",
+    "@solana/spl-token": "^0.3.8",
     "@solana/web3.js": "^1.98.2"
   },
   "devDependencies": {

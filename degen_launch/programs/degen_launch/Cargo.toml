@@ -17,6 +17,10 @@ no-log-ix-name = []
 idl-build = ["anchor-lang/idl-build"]
 
 [dependencies]
-anchor-lang = "0.31.1"
-anchor-spl = "0.31.1"
-solana-program = "=2.1.0"
+anchor-lang = "0.29.0"
+anchor-spl = "0.29.0"
+solana-program = "=1.17.22"
+
+# Use a specific branch of whirlpool-cpi that should be compatible with Anchor 0.29.0
+whirlpool-cpi = { git = "https://github.com/orca-so/whirlpool-cpi.git", features = ["cpi"], branch = "anchor/0.29.0" }
+bytemuck = "=1.16.3"

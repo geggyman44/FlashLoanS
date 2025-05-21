@@ -1,8 +1,7 @@
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::program::invoke;
+use anchor_lang::solana_program::{instruction::{AccountMeta, Instruction}, program::invoke};
 use anchor_spl::token::{Token, TokenAccount, Mint};
-use whirlpool_cpi::program::Whirlpool;  // Add this import
-use whirlpool_cpi::state::{WhirlpoolRewardInfo, Whirlpool, TickArray, FeeTier};  // Add this import
+use whirlpool_cpi::state::{WhirlpoolRewardInfo, Whirlpool, TickArray, FeeTier};
 use crate::whirlpool_utils::WhirlpoolPdas;
 
 pub mod solend;
@@ -10,16 +9,92 @@ pub mod swap_via_orca;
 mod constants;
 mod whirlpool_utils;
 
+#[allow(unused_imports)]
 use solend::flash_loan_ix;
+#[allow(unused_imports)]
 use swap_via_orca::SwapViaOrca;
 
 
 declare_id!("6UBFGLf5YBdVAzdzzoMhQsL3pM1KjgRp7EgVDCP4UqGV");
 
+#[derive(Accounts)]
+pub struct TriggerFlashloan<'info> {
+    /// SPL Token Lending program (Solend uses this under the hood)
+    pub lending_program: Program<'info, FlashLoanProgram>,
+    /// CHECK: This is validated by the lending program
+    pub reserve: AccountInfo<'info>,
+    /// CHECK: Not read by our program, just passed through
+    pub reserve_liquidity_supply: AccountInfo<'info>,
+    /// CHECK: Validated by Solend program
+    pub lending_market_authority: AccountInfo<'info>,
+    /// CHECK: This is the destination for borrowed funds
+    #[account(mut)]
+    pub user_liquidity: AccountInfo<'info>,
+    /// Token program
+    pub token_program: Program<'info, Token>,
+}
+
 #[program]
 pub mod degen_launch {
     use super::*;
 
+    // Add this new function alongside your existing execute_flashloan_selfdump
+    pub fn start_flashloan(
+        ctx: Context<TriggerFlashloan>,
+        amount: u64,
+        minimum_amount_out: u64,
+        _is_buy: bool,
+    ) -> Result<()> {
+        // Build the callback instruction that will be executed after receiving the flash loan
+        let accounts = vec![
+            AccountMeta::new(ctx.accounts.reserve.key(), false),
+            AccountMeta::new(ctx.accounts.user_liquidity.key(), false),
+            AccountMeta::new(ctx.accounts.reserve_liquidity_supply.key(), false),
+            AccountMeta::new(ctx.accounts.lending_market_authority.key(), false),
+            AccountMeta::new_readonly(ctx.accounts.token_program.key(), false),
+            // Add all other required accounts for execute_flashloan_selfdump
+            // You'll need to pass these in from the client side
+        ];
+
+        let ix = Instruction {
+            program_id: crate::ID,
+            accounts,
+            data: anchor_lang::InstructionData::data(
+                &crate::instruction::ExecuteFlashloanSelfdump {
+                    amount,
+                    minimum_amount_out,
+                    _is_buy,
+                },
+            ),
+        };
+
+        // Construct Solend's flash loan instruction with our callback
+        let flashloan_ix = crate::solend::flash_loan_ix(
+            ctx.accounts.lending_program.key(),
+            ctx.accounts.reserve_liquidity_supply.key(),
+            ctx.accounts.user_liquidity.key(),
+            ctx.accounts.reserve.key(),
+            ctx.accounts.lending_market_authority.key(),
+            amount,
+        );
+
+        // Execute the flash loan via CPI
+        invoke(
+            &flashloan_ix,
+            &[
+                ctx.accounts.lending_program.to_account_info(),
+                ctx.accounts.reserve.clone(),
+                ctx.accounts.user_liquidity.clone(),
+                ctx.accounts.reserve_liquidity_supply.clone(),
+                ctx.accounts.lending_market_authority.clone(),
+                ctx.accounts.token_program.to_account_info(),
+            ],
+        )?;
+
+        Ok(())
+    }
+
+    // Your existing execute_flashloan_selfdump function remains here
     pub fn execute_flashloan_selfdump(
         ctx: Context<ExecuteFlashloanSelfdump>,
         amount: u64,
@@ -28,9 +103,9 @@ pub mod degen_launch {
     ) -> Result<()> {
         let whirlpool_account_info = &ctx.accounts.whirlpool;
         let whirlpool_data = whirlpool_account_info.try_borrow_data()?;
-        
+
         let fee_tier: u16 = 64;
-        
+
         let pdas = WhirlpoolPdas::new(
             &whirlpool_data,
             whirlpool_account_info.key(),
@@ -45,11 +120,11 @@ pub mod degen_launch {
             token_authority: ctx.accounts.token_authority.to_account_info(),
             token_owner_account_a: ctx.accounts.token_owner_account.to_account_info(),
             token_vault_a: ctx.accounts.token_vault_a.to_account_info(),
-            token_owner_account_b: ctx.accounts.user_liquidity.to_account_info(), // Using flash loan dest account
+            token_owner_account_b: ctx.accounts.user_liquidity.to_account_info(),
             token_vault_b: ctx.accounts.token_vault_b.to_account_info(),
             tick_array_0: ctx.accounts.tick_array_0.to_account_info(),
-            tick_array_1: ctx.accounts.tick_array_1.as_ref().map(|a| a.to_account_info()),
-            tick_array_2: ctx.accounts.tick_array_2.as_ref().map(|a| a.to_account_info()),
+            tick_array_1: ctx.accounts.tick_array_1.as_ref().map(|a| a.to_account_info()).unwrap_or(ctx.accounts.tick_array_0.to_account_info()),
+            tick_array_2: ctx.accounts.tick_array_2.as_ref().map(|a| a.to_account_info()).unwrap_or(ctx.accounts.tick_array_0.to_account_info()),
             oracle: ctx.accounts.oracle.to_account_info(),
         };
 
@@ -60,7 +135,7 @@ pub mod degen_launch {
 
         // Set swap parameters
         let sqrt_price_limit = 0; // 0 for no limit
-        
+
         // Execute the swap via CPI
         whirlpool_cpi::cpi::swap(
             cpi_ctx,
