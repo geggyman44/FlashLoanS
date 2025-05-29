@@ -5,6 +5,12 @@ skip-lint = false
 [programs.localnet]
 degen_launch = "6UBFGLf5YBdVAzdzzoMhQsL3pM1KjgRp7EgVDCP4UqGV"
 
+[programs.devnet]
+degen_launch = "6UBFGLf5YBdVAzdzzoMhQsL3pM1KjgRp7EgVDCP4UqGV"
+
+[programs.mainnet]
+degen_launch = "6UBFGLf5YBdVAzdzzoMhQsL3pM1KjgRp7EgVDCP4UqGV"
+
 [registry]
 url = "https://api.apr.dev"
 
